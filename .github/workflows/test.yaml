@@ -10,4 +10,4 @@ jobs:
         with:
           repository: wled/WLED-WebInstaller
           event-type: release-nightly
-          token: ${{ secrets.PAT_PUBLIC }}
+          token: ${{ secrets.GITHUB_TOKEN }}
