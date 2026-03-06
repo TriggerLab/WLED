@@ -1,196 +1,242 @@
 #include "wled.h"
 
-class InternalTemperatureUsermod : public Usermod
-{
+#ifdef ARDUINO_ARCH_ESP32
+  #include <HTTPClient.h>
+#else
+  #include <ESP8266HTTPClient.h>
+#endif
 
+class InternalTemperatureUsermod : public Usermod {
 private:
-  static constexpr unsigned long minLoopInterval = 1000;  // minimum allowable interval (ms)
+  static constexpr unsigned long minLoopInterval = 1000;
   unsigned long loopInterval = 10000;
   unsigned long lastTime = 0;
   bool isEnabled = false;
+
   float temperature = 0.0f;
-  uint8_t previousPlaylist = 0;         // Stores the playlist that was active before high-temperature activation
-  uint8_t previousPreset = 0;           // Stores the preset that was active before high-temperature activation
-  uint8_t presetToActivate = 0;         // Preset to activate when temp goes above threshold (0 = disabled)
-  float activationThreshold = 95.0f;    // Temperature threshold to trigger high-temperature actions
-  float resetMargin = 2.0f;             // Margin below the activation threshold (Prevents frequent toggling when close to threshold)
-  bool isAboveThreshold = false;        // Flag to track if the high temperature preset is currently active
+
+  uint8_t previousPlaylist = 0;
+  uint8_t previousPreset = 0;
+  uint8_t presetToActivate = 0;
+
+  float activationThreshold = 95.0f;
+  float resetMargin = 2.0f;
+
+  bool isAboveThreshold = false;
+
+  bool webhookEnabled = false;
+  String webhookUrl = "";
+  bool webhookAppendParams = true;
+  float webhookThreshold = 95.0f;
+  bool webhookTriggered = false;
 
   static const char _name[];
   static const char _enabled[];
   static const char _loopInterval[];
   static const char _activationThreshold[];
   static const char _presetToActivate[];
+  static const char _webhookUrl[];
+  static const char _webhookEnabled[];
+  static const char _webhookAppendParams[];
+  static const char _webhookThreshold[];
 
-  // any private methods should go here (non-inline method should be defined out of class)
-  void publishMqtt(const char *state, bool retain = false); // example for publishing MQTT message
+  void publishMqtt(const char *state, bool retain = false);
+
+  void sendWebhookIfConfigured() {
+    if (!webhookEnabled) return;
+	webhookUrl.trim();
+    if (webhookUrl.length() == 0) return;
+    if (WiFi.status() != WL_CONNECTED) return;
+
+    String call = webhookUrl;
+
+    if (webhookAppendParams) {
+      String sep = "";
+      if (call.endsWith("?") || call.endsWith("&")) {
+        sep = "";
+      } else if (call.indexOf('?') >= 0) {
+        sep = "&";
+      } else {
+        sep = "?";
+      }
+
+      String tempStr = String(temperature, 1);
+
+      call += sep + "temp=" + tempStr;
+    }
+
+    HTTPClient http;
+    http.begin(call);
+	#ifdef ARDUINO_ARCH_ESP32
+	  http.setTimeout(5000);
+	#else
+	  http.setTimeout(5);
+	#endif
+    int code = http.GET();
+    http.end();
+    (void)code;
+  }
 
 public:
-  void setup()
-  {
-  }
+  void setup() { }
 
-  void loop()
-  {
-    // if usermod is disabled or called during strip updating just exit
-    // NOTE: on very long strips strip.isUpdating() may always return true so update accordingly
-    if (!isEnabled || strip.isUpdating() || millis() - lastTime <= loopInterval)
-      return;
-
+  void loop() {
+    if (!isEnabled || strip.isUpdating() || (millis() - lastTime) <= loopInterval) return;
     lastTime = millis();
 
-// Measure the temperature
-#ifdef ESP8266 // ESP8266
-    // does not seem possible
-    temperature = -1;
-#elif defined(CONFIG_IDF_TARGET_ESP32S2) // ESP32S2
-    temperature = -1;
-#else                                    // ESP32 ESP32S3 and ESP32C3
-    temperature = roundf(temperatureRead() * 10) / 10;
-#endif
- if(presetToActivate != 0){
-    // Check if temperature has exceeded the activation threshold
-    if (temperature >= activationThreshold) {
-      // Update the state flag if not already set
-      if (!isAboveThreshold) {
-        isAboveThreshold = true;
-        }
-      // Check if a 'high temperature' preset is configured and it's not already active
-      if (currentPreset != presetToActivate) {
-        // If a playlist is active, store it for reactivation later
-        if (currentPlaylist > 0) {
-          previousPlaylist = currentPlaylist;
-        }
-        // If a preset is active, store it for reactivation later
-        else if (currentPreset > 0) {
-          previousPreset = currentPreset;
-        // If no playlist or preset is active, save current state for reactivation later
-        } else {
-          saveTemporaryPreset();
-        }
-        // Activate the 'high temperature' preset
-        applyPreset(presetToActivate);
-        }
-      }
-    // Check if temperature is back below the threshold
-    else if (temperature <= (activationThreshold - resetMargin)) {
-      // Update the state flag if not already set
-      if (isAboveThreshold){
-        isAboveThreshold = false;
-        }
-      // Check if the 'high temperature' preset is active
-      if (currentPreset == presetToActivate) {
-        // Check if a previous playlist was stored
-        if (previousPlaylist > 0) {
-          // Reactivate the stored playlist
-          applyPreset(previousPlaylist);
-          // Clear the stored playlist
-          previousPlaylist = 0;
-          }
-        // Check if a previous preset was stored
-        else if (previousPreset > 0) {
-          // Reactivate the stored preset
-          applyPreset(previousPreset);
-          // Clear the stored preset
-          previousPreset = 0;
-          // If no previous playlist or preset was stored, revert to the stored state
-        } else {
-          applyTemporaryPreset();
-          }
-        }
-      }
- }
+    #ifdef ESP8266
+      temperature = -1;
+    #elif defined(CONFIG_IDF_TARGET_ESP32S2)
+      temperature = -1;
+    #else
+      temperature = roundf(temperatureRead() * 10) / 10; // округление до 0.1
+    #endif
 
-#ifndef WLED_DISABLE_MQTT
-    if (WLED_MQTT_CONNECTED)
-    {
-      char array[10];
-      snprintf(array, sizeof(array), "%f", temperature);
+    if (webhookEnabled && webhookUrl.length() > 0) {
+      if (!webhookTriggered && temperature >= webhookThreshold) {
+        sendWebhookIfConfigured();
+        webhookTriggered = true;
+      } else if (webhookTriggered && temperature < webhookThreshold) {
+        webhookTriggered = false;
+      }
+    }
+
+    if (presetToActivate != 0) {
+      if (temperature >= activationThreshold) {
+        if (!isAboveThreshold) {
+          isAboveThreshold = true;
+        }
+
+        if (currentPreset != presetToActivate) {
+          if (currentPlaylist > 0) {
+            previousPlaylist = currentPlaylist;
+          } else if (currentPreset > 0) {
+            previousPreset = currentPreset;
+          } else {
+            saveTemporaryPreset();
+          }
+          applyPreset(presetToActivate);
+        }
+      } else if (temperature <= (activationThreshold - resetMargin)) {
+        if (isAboveThreshold) {
+          isAboveThreshold = false;
+        }
+
+        if (currentPreset == presetToActivate) {
+          if (previousPlaylist > 0) {
+            applyPreset(previousPlaylist);
+            previousPlaylist = 0;
+          } else if (previousPreset > 0) {
+            applyPreset(previousPreset);
+            previousPreset = 0;
+          } else {
+            applyTemporaryPreset();
+          }
+        }
+      }
+    }
+
+    #ifndef WLED_DISABLE_MQTT
+    if (WLED_MQTT_CONNECTED) {
+      char array[16];
+      String s = String(temperature, 1);
+      snprintf(array, sizeof(array), "%s", s.c_str());
       publishMqtt(array);
     }
-#endif
+    #endif
   }
 
-  void addToJsonInfo(JsonObject &root)
-  {
-    if (!isEnabled)
-      return;
-
-    // if "u" object does not exist yet wee need to create it
+  void addToJsonInfo(JsonObject &root) {
+    if (!isEnabled) return;
     JsonObject user = root["u"];
-    if (user.isNull())
-      user = root.createNestedObject("u");
-
+    if (user.isNull()) user = root.createNestedObject("u");
     JsonArray userTempArr = user.createNestedArray(FPSTR(_name));
     userTempArr.add(temperature);
     userTempArr.add(F(" °C"));
 
-    // if "sensor" object does not exist yet wee need to create it
     JsonObject sensor = root[F("sensor")];
-    if (sensor.isNull())
-      sensor = root.createNestedObject(F("sensor"));
-
+    if (sensor.isNull()) sensor = root.createNestedObject(F("sensor"));
     JsonArray sensorTempArr = sensor.createNestedArray(FPSTR(_name));
     sensorTempArr.add(temperature);
     sensorTempArr.add(F("°C"));
   }
 
-  void addToConfig(JsonObject &root)
-  {
+  void addToConfig(JsonObject &root) {
     JsonObject top = root.createNestedObject(FPSTR(_name));
     top[FPSTR(_enabled)] = isEnabled;
     top[FPSTR(_loopInterval)] = loopInterval;
     top[FPSTR(_activationThreshold)] = activationThreshold;
     top[FPSTR(_presetToActivate)] = presetToActivate;
+
+    top[FPSTR(_webhookEnabled)] = webhookEnabled;
+    top[FPSTR(_webhookUrl)] = String(webhookUrl);
+    top[FPSTR(_webhookAppendParams)] = webhookAppendParams;
+    top[FPSTR(_webhookThreshold)] = webhookThreshold;
   }
 
-    // Append useful info to the usermod settings gui
-    void appendConfigData()
-    {
-    // Display 'ms' next to the 'Loop Interval' setting
+  void appendConfigData() {
     oappend(F("addInfo('Internal Temperature:Loop Interval', 1, 'ms');"));
-    // Display '°C' next to the 'Activation Threshold' setting
     oappend(F("addInfo('Internal Temperature:Activation Threshold', 1, '°C');"));
-    // Display '0 = Disabled' next to the 'Preset To Activate' setting
     oappend(F("addInfo('Internal Temperature:Preset To Activate', 1, '0 = unused');"));
-    }
+    oappend(F("addInfo('Internal Temperature:Webhook URL', 1, 'GET or exact URL as required');"));
+    oappend(F("addInfo('Internal Temperature:Webhook Append Params', 1, 'If enabled, WLED will append ?temp=.. to the provided URL');"));
+    oappend(F("addInfo('Internal Temperature:Webhook Threshold', 1, 'Trigger webhook when temp >= this value (°C)');"));
+  }
 
-  bool readFromConfig(JsonObject &root)
-  {
+  bool readFromConfig(JsonObject &root) {
     JsonObject top = root[FPSTR(_name)];
     bool configComplete = !top.isNull();
     configComplete &= getJsonValue(top[FPSTR(_enabled)], isEnabled);
     configComplete &= getJsonValue(top[FPSTR(_loopInterval)], loopInterval);
-    loopInterval = max(loopInterval, minLoopInterval);    // Makes sure the loop interval isn't too small.
+
+    loopInterval = max(loopInterval, minLoopInterval);
+
     configComplete &= getJsonValue(top[FPSTR(_presetToActivate)], presetToActivate);
     configComplete &= getJsonValue(top[FPSTR(_activationThreshold)], activationThreshold);
+
+    if (!top.isNull() && top.containsKey(FPSTR(_webhookEnabled))) {
+      configComplete &= getJsonValue(top[FPSTR(_webhookEnabled)], webhookEnabled);
+    }
+    if (!top.isNull() && top.containsKey(FPSTR(_webhookUrl))) {
+      String tmp;
+      configComplete &= getJsonValue(top[FPSTR(_webhookUrl)], tmp);
+      webhookUrl = tmp;
+    }
+    if (!top.isNull() && top.containsKey(FPSTR(_webhookAppendParams))) {
+      configComplete &= getJsonValue(top[FPSTR(_webhookAppendParams)], webhookAppendParams);
+    }
+    if (!top.isNull() && top.containsKey(FPSTR(_webhookThreshold))) {
+      configComplete &= getJsonValue(top[FPSTR(_webhookThreshold)], webhookThreshold);
+    } else {
+      webhookThreshold = activationThreshold;
+    }
+
     return configComplete;
   }
 
-  uint16_t getId()
-  {
-    return USERMOD_ID_INTERNAL_TEMPERATURE;
-  }
+  uint16_t getId() { return USERMOD_ID_INTERNAL_TEMPERATURE; }
 };
 
+// PROGMEM строки (ключи конфигурации)
 const char InternalTemperatureUsermod::_name[] PROGMEM = "Internal Temperature";
 const char InternalTemperatureUsermod::_enabled[] PROGMEM = "Enabled";
 const char InternalTemperatureUsermod::_loopInterval[] PROGMEM = "Loop Interval";
 const char InternalTemperatureUsermod::_activationThreshold[] PROGMEM = "Activation Threshold";
 const char InternalTemperatureUsermod::_presetToActivate[] PROGMEM = "Preset To Activate";
+const char InternalTemperatureUsermod::_webhookUrl[] PROGMEM = "Webhook URL";
+const char InternalTemperatureUsermod::_webhookEnabled[] PROGMEM = "Webhook Enabled";
+const char InternalTemperatureUsermod::_webhookAppendParams[] PROGMEM = "Webhook Append Params";
+const char InternalTemperatureUsermod::_webhookThreshold[] PROGMEM = "Webhook Threshold";
 
-void InternalTemperatureUsermod::publishMqtt(const char *state, bool retain)
-{
-#ifndef WLED_DISABLE_MQTT
-  // Check if MQTT Connected, otherwise it will crash the 8266
-  if (WLED_MQTT_CONNECTED)
-  {
+void InternalTemperatureUsermod::publishMqtt(const char *state, bool retain) {
+  #ifndef WLED_DISABLE_MQTT
+  if (WLED_MQTT_CONNECTED) {
     char subuf[64];
     strcpy(subuf, mqttDeviceTopic);
     strcat_P(subuf, PSTR("/mcutemp"));
     mqtt->publish(subuf, 0, retain, state);
   }
-#endif
+  #endif
 }
 
 static InternalTemperatureUsermod internal_temperature_v2;
