@@ -1,15 +1,14 @@
-name: PlatformIO Dependabot
+name: Renovate
 on:
   schedule:
-    - cron: '0 0 * * 1'
+    - cron: '0 0 * * *' # Каждый день в полночь
   workflow_dispatch:
-
 jobs:
-  update:
+  renovate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run PlatformIO Dependabot
-        uses: peterus/platformio_dependabot@v1
+      - uses: renovatebot/github-action@v40.1.11
         with:
+          configurationFile: renovate.json
           github_token: ${{ secrets.GITHUB_TOKEN }}
