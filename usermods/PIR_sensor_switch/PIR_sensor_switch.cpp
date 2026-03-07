@@ -312,6 +312,7 @@ void PIRsensorSwitch::loop() {
 void PIRsensorSwitch::addToJsonInfo(JsonObject &root) {
   JsonObject user = root["u"];
   if (user.isNull()) user = root.createNestedObject("u");
+
   bool state = false;
   for (int i = 0; i < PIR_SENSOR_MAX_SENSORS; i++) if (PIRsensorPin[i] >= 0) state |= sensorPinState[i];
 
@@ -319,7 +320,7 @@ void PIRsensorSwitch::addToJsonInfo(JsonObject &root) {
 
   if (enabled) {
     if (offTimerStart > 0) {
-      unsigned int offSeconds = (m_switchOffDelay - (millis() - offTimerStart)) / 1000;
+      unsigned int offSeconds = (m_switchOffDelay > (millis() - offTimerStart)) ? (m_switchOffDelay - (millis() - offTimerStart)) / 1000 : 0;
       String uiDomString;
       if (offSeconds >= 3600) {
         uiDomString += (offSeconds / 3600);
@@ -343,7 +344,7 @@ void PIRsensorSwitch::addToJsonInfo(JsonObject &root) {
 
   // Add control button (restore original UI button behaviour)
   String uiDomString;
-  uiDomString  = F(" <button class=\"btn btn-xs\" onclick=\"requestJson({");
+  uiDomString  = String(F(" <button class=\"btn btn-xs\" onclick=\"requestJson({"));
   uiDomString += FPSTR(_name);
   uiDomString += F(":{");
   uiDomString += FPSTR(_enabled);
