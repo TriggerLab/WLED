@@ -374,11 +374,11 @@ void PIRsensorSwitch::onStateChange(uint8_t mode) {
 }
 
 void PIRsensorSwitch::readFromJsonState(JsonObject &root) {
-  if (!initDone) return; // prevent crash on boot applyPreset()
+  if (!initDone) return;  // prevent crash on boot applyPreset()
   JsonObject usermod = root[FPSTR(_name)];
   if (!usermod.isNull()) {
-    if (usermod[FPSTR(_enabled)].is()) {
-      enabled = usermod[FPSTR(_enabled)].as();
+    if (usermod[FPSTR(_enabled)].is<bool>()) {
+      enabled = usermod[FPSTR(_enabled)].as<bool>();
     }
   }
 }
@@ -422,8 +422,7 @@ bool PIRsensorSwitch::readFromConfig(JsonObject &root) {
   DEBUG_PRINT(FPSTR(_name));
   JsonObject top = root[FPSTR(_name)];
   if (top.isNull()) {
-    DEBUG_PRINTLN(F(": No config found.
-(Using defaults.)"));
+    DEBUG_PRINTLN(F(": No config found. (Using defaults.)"));
     return false;
   }
   JsonArray pins = top["pin"];
@@ -457,4 +456,5 @@ bool PIRsensorSwitch::readFromConfig(JsonObject &root) {
 
 static PIRsensorSwitch pir_sensor_switch;
 REGISTER_USERMOD(pir_sensor_switch);
+
 
