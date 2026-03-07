@@ -345,7 +345,7 @@
 				gId("rev"+n).innerHTML = isAna(t) ? "Inverted output":"Reversed";           // change reverse text for analog else (rotated 180°)
 				//gId("psd"+n).innerHTML = isAna(t) ? "Index:":"Start:";                      // change analog start description
 				gId("net"+n+"h").style.display = isNet(t) && !is8266() ? "block" : "none";  // show host field for network types except on ESP8266
-				if (!isNet(t) || is8266()) d.Sf["HS"+n].value = "";                         // cleart host field if not network type or ESP8266
+				if (!isNet(t) || is8266()) d.Sf["HS"+n].value = "";                         // cleart host field if not network type or ESP8266
 			});
 			// display global white channel overrides
 			gId("wc").style.display = (gRGBW) ? 'inline':'none';
