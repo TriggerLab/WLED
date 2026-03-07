@@ -1,12 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com",
-  "extends": ["config:recommended"],
+  "extends": [
+    "config:recommended"
+  ],
   "customManagers": [
     {
       "customType": "regex",
       "fileMatch": ["(^|/)platformio\\.ini$", "(^|/)platformio_override\\.ini$"],
       "matchStrings": [
-        "https://github.com(?<depName>[^/]+/[^/\\s#]+)(?:\\.git)?#(?<currentValue>[^\\s]+)"
+        "https://github\\.com/(?<depName>[^/]+/[^/\\s#]+)(?:\\.git)?#(?<currentValue>[^\\s]+)"
       ],
       "datasourceTemplate": "github-tags"
     },
@@ -14,7 +16,7 @@
       "customType": "regex",
       "fileMatch": ["(^|/)platformio\\.ini$", "(^|/)platformio_override\\.ini$"],
       "matchStrings": [
-        "(?<depName>[\\w\\s-]+)@(?<currentValue>[\\d\\.]+)"
+        "(?<depName>[\\w\\s-]+)@(?<currentValue>[\\d\\.\\alpha\\beta\\-rc]+)"
       ],
       "datasourceTemplate": "github-tags"
     }
