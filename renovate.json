@@ -16,7 +16,7 @@
       "customType": "regex",
       "fileMatch": ["(^|/)platformio\\.ini$", "(^|/)platformio_override\\.ini$"],
       "matchStrings": [
-        "(?<depName>[\\w\\s-]+)@(?<currentValue>[\\d\\.\\alpha\\beta\\-rc]+)"
+        "(?<depName>[\\w\\s-]+)@(?<currentValue>[\\d\\.]+[\\w\\.-]*)"
       ],
       "datasourceTemplate": "github-tags"
     }
