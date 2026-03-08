@@ -72,6 +72,9 @@ private:
   bool m_offMode            = offMode;
   bool m_override           = false;
 
+  // NEW: flag to disable automatic "off" action (checkbox)
+  bool m_disableOff         = false;
+
   // Home Assistant
   bool HomeAssistantDiscovery = false;        // is HA discovery turned on
   int16_t idx = -1; // Domoticz virtual switch idx
@@ -88,6 +91,8 @@ private:
   static const char _haDiscovery[];
   static const char _override[];
   static const char _domoticzIDX[];
+  // NEW
+  static const char _disableOff[];
 
   /**
    * check if it is daytime
@@ -201,6 +206,8 @@ const char PIRsensorSwitch::_offOnly[]        PROGMEM = "off-only";
 const char PIRsensorSwitch::_haDiscovery[]    PROGMEM = "HA-discovery";
 const char PIRsensorSwitch::_override[]       PROGMEM = "override";
 const char PIRsensorSwitch::_domoticzIDX[]    PROGMEM = "domoticz-idx";
+// NEW
+const char PIRsensorSwitch::_disableOff[]     PROGMEM = "disable-off";
 
 bool PIRsensorSwitch::isDayTime() {
   updateLocalTime();
@@ -224,6 +231,12 @@ bool PIRsensorSwitch::isDayTime() {
 
 void PIRsensorSwitch::switchStrip(bool switchOn)
 {
+  // NEW: if disable-off is set, prevent automatic switch off
+  if (!switchOn && m_disableOff) {
+    DEBUG_PRINTLN(F("PIR: automatic off is disabled by setting."));
+    return;
+  }
+
   if (m_offOnly && bri && (switchOn || (!PIRtriggered && !switchOn))) return; //if lights on and off only, do nothing
   if (PIRtriggered && switchOn) return; //if already on and triggered before, do nothing
   PIRtriggered = switchOn;
@@ -486,6 +499,10 @@ void PIRsensorSwitch::readFromJsonState(JsonObject &root)
     if (usermod[FPSTR(_enabled)].is<bool>()) {
       enabled = usermod[FPSTR(_enabled)].as<bool>();
     }
+    // allow toggle of disable-off via /json/state (no info buttons)
+    if (usermod[FPSTR(_disableOff)].is<bool>()) {
+      m_disableOff = usermod[FPSTR(_disableOff)].as<bool>();
+    }
   }
 }
 
@@ -504,6 +521,8 @@ void PIRsensorSwitch::addToConfig(JsonObject &root)
   top[FPSTR(_override)]       = m_override;
   top[FPSTR(_haDiscovery)]    = HomeAssistantDiscovery;
   top[FPSTR(_domoticzIDX)]    = idx;
+  // NEW
+  top[FPSTR(_disableOff)]     = m_disableOff;
   DEBUG_PRINTLN(F("PIR config saved."));
 }
 
@@ -511,6 +530,8 @@ void PIRsensorSwitch::appendConfigData()
 {
   oappend(F("addInfo('PIRsensorSwitch:HA-discovery',1,'HA=Home Assistant');"));     // 0 is field type, 1 is actual field
   oappend(F("addInfo('PIRsensorSwitch:override',1,'Cancel timer on change');"));    // 0 is field type, 1 is actual field
+  // info for disable off in config UI (not in info tab)
+  oappend(F("addInfo('PIRsensorSwitch:disableOff',1,'Disable automatic off');"));
   for (int i = 0; i < PIR_SENSOR_MAX_SENSORS; i++) {
     char str[128];
     sprintf_P(str, PSTR("addInfo('PIRsensorSwitch:pin[]',%d,'','#%d');"), i, i);
@@ -556,6 +577,9 @@ bool PIRsensorSwitch::readFromConfig(JsonObject &root)
   m_override      = top[FPSTR(_override)] | m_override;
   HomeAssistantDiscovery = top[FPSTR(_haDiscovery)] | HomeAssistantDiscovery;
   idx             = top[FPSTR(_domoticzIDX)] | idx;
+
+  // NEW: read disable-off flag
+  m_disableOff     = top[FPSTR(_disableOff)] | m_disableOff;
 
   if (!initDone) {
     // reading config prior to setup()
