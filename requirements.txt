@@ -48,7 +48,7 @@ starlette==0.52.1
     # via platformio
 tabulate==0.10.0
     # via platformio
-typing-extensions==4.12.2
+typing-extensions==4.15.0
     # via anyio
 urllib3==2.6.3
     # via requests
