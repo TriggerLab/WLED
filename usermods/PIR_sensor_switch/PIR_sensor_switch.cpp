@@ -22,12 +22,6 @@
  * The strip will be switched on and the off timer will be resetted when the sensor goes HIGH. 
  * When the sensor state goes LOW, the off timer is started and when it expires, the strip is switched off. 
  * Maintained by: @blazoncek
- * 
- * Usermods allow you to add own functionality to WLED more easily
- * See: https://github.com/wled-dev/WLED/wiki/Add-own-functionality
- * 
- * v2 usermods are class inheritance based and can (but don't have to) implement more functions, each of them is shown in this example.
- * Multiple v2 usermods can be added to one compilation easily.
  */
 
 class PIRsensorSwitch : public Usermod
@@ -74,6 +68,9 @@ private:
 
   // NEW: flag to disable automatic "off" action (checkbox)
   bool m_disableOff         = false;
+
+  // Use existing m_switchOffDelay as warmup duration; bootMillis marks start time
+  unsigned long bootMillis = 0;
 
   // Home Assistant
   bool HomeAssistantDiscovery = false;        // is HA discovery turned on
@@ -123,74 +120,15 @@ private:
 public:
   //Functions called by WLED
 
-  /**
-   * setup() is called once at boot. WiFi is not yet connected at this point.
-   * You can use it to initialize variables, sensors or similar.
-   */
   void setup() override;
-
-  /**
-   * connected() is called every time the WiFi is (re)connected
-   * Use it to initialize network interfaces
-   */
-  //void connected();
-
-  /**
-   * onMqttConnect() is called when MQTT connection is established
-   */
   void onMqttConnect(bool sessionPresent) override;
-
-  /**
-   * loop() is called continuously. Here you can check for events, read sensors, etc.
-   */
   void loop() override;
-
-  /**
-   * addToJsonInfo() can be used to add custom entries to the /json/info part of the JSON API.
-   * 
-   * Add PIR sensor state and switch off timer duration to jsoninfo
-   */
   void addToJsonInfo(JsonObject &root) override;
-
-  /**
-   * onStateChanged() is used to detect WLED state change
-   */
   void onStateChange(uint8_t mode) override;
-
-  /**
-   * addToJsonState() can be used to add custom entries to the /json/state part of the JSON API (state object).
-   * Values in the state object may be modified by connected clients
-   */
-  //void addToJsonState(JsonObject &root);
-
-  /**
-   * readFromJsonState() can be used to receive data clients send to the /json/state part of the JSON API (state object).
-   * Values in the state object may be modified by connected clients
-   */
   void readFromJsonState(JsonObject &root) override;
-
-  /**
-   * provide the changeable values
-   */
   void addToConfig(JsonObject &root) override;
-
-  /**
-   * provide UI information and allow extending UI options
-   */
   void appendConfigData() override;
-
-  /**
-   * restore the changeable values
-   * readFromConfig() is called before setup() to populate properties from values stored in cfg.json
-   *
-   * The function should return true if configuration was successfully loaded or false if there was no configuration.
-   */
   bool readFromConfig(JsonObject &root) override;
-
-  /**
-   * getId() allows you to optionally give your V2 usermod an unique ID (please define it in const.h!).
-   * This could be used in the future for the system to determine whether your usermod is installed.
-   */
   uint16_t getId() override { return USERMOD_ID_PIRSWITCH; }
 };
 
@@ -350,6 +288,16 @@ bool PIRsensorSwitch::updatePIRsensorState()
 
     bool pinState = digitalRead(PIRsensorPin[i]);
     if (pinState != sensorPinState[i]) {
+      // CHECK: ignore PIR changes during warmup (use m_switchOffDelay as warmup duration)
+      bool inWarmup = (millis() - bootMillis) < m_switchOffDelay;
+      if (inWarmup) {
+        // Do NOT update sensorPinState here — keeps previous stored state so the
+        // change (HIGH) will be detected immediately after warmup ends.
+        DEBUG_PRINTLN(F("PIR: warmup — ignoring motion changes."));
+        continue;
+      }
+
+      // update stored state (only after warmup)
       sensorPinState[i] = pinState; // change previous state
       stateChanged = true;
 
@@ -400,6 +348,9 @@ void PIRsensorSwitch::setup()
     }
   }
   initDone = true;
+
+  // mark boot time — use existing m_switchOffDelay as warmup duration
+  bootMillis = millis();
 }
 
 void PIRsensorSwitch::onMqttConnect(bool sessionPresent)
