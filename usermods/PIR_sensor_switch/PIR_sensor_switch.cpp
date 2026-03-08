@@ -473,7 +473,7 @@ bool PIRsensorSwitch::readFromConfig(JsonObject &root)
   idx             = top[FPSTR(_domoticzIDX)] | idx;
 
   // restore the minimal flag
-  m_disableOff    = top[FPSTR(_disableOff)] | m_disableOff;
+  m_disableOff    = top[FPSTR(_disableOff)] | false;
 
   if (!initDone) {
     DEBUG_PRINTLN(F(" config loaded."));
@@ -488,3 +488,4 @@ bool PIRsensorSwitch::readFromConfig(JsonObject &root)
 
 static PIRsensorSwitch pir_sensor_switch;
 REGISTER_USERMOD(pir_sensor_switch);
+
