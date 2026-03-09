@@ -17,7 +17,7 @@ private:
 
   uint8_t previousPlaylist = 0;
   uint8_t previousPreset = 0;
-  uint8_t presetToActivate = 0;
+  uint8_t savedPresetToActivate = 0;
 
   float activationThreshold = 95.0f;
   float resetMargin = 2.0f;
@@ -30,6 +30,9 @@ private:
   float webhookThreshold = 95.0f;
   bool webhookTriggered = false;
 
+  bool oneTimeDisable = false;
+  bool blockRestore = false;
+
   static const char _name[];
   static const char _enabled[];
   static const char _loopInterval[];
@@ -39,6 +42,7 @@ private:
   static const char _webhookEnabled[];
   static const char _webhookAppendParams[];
   static const char _webhookThreshold[];
+  static const char _oneTimeDisable[]; // ключ конфигурации
 
   void publishMqtt(const char *state, bool retain = false);
 
@@ -89,7 +93,7 @@ public:
     #elif defined(CONFIG_IDF_TARGET_ESP32S2)
       temperature = -1;
     #else
-      temperature = roundf(temperatureRead() * 10) / 10; // округление до 0.1
+      temperature = roundf(temperatureRead() * 10) / 10;
     #endif
 
     if (webhookEnabled && webhookUrl.length() > 0) {
@@ -101,13 +105,17 @@ public:
       }
     }
 
-    if (presetToActivate != 0) {
+    if (savedPresetToActivate != 0) {
       if (temperature >= activationThreshold) {
         if (!isAboveThreshold) {
           isAboveThreshold = true;
+
+          if (oneTimeDisable) {
+            blockRestore = true;
+          }
         }
 
-        if (currentPreset != presetToActivate) {
+        if (currentPreset != savedPresetToActivate) {
           if (currentPlaylist > 0) {
             previousPlaylist = currentPlaylist;
           } else if (currentPreset > 0) {
@@ -115,22 +123,26 @@ public:
           } else {
             saveTemporaryPreset();
           }
-          applyPreset(presetToActivate);
+          applyPreset(savedPresetToActivate);
         }
       } else if (temperature <= (activationThreshold - resetMargin)) {
         if (isAboveThreshold) {
           isAboveThreshold = false;
         }
 
-        if (currentPreset == presetToActivate) {
-          if (previousPlaylist > 0) {
-            applyPreset(previousPlaylist);
-            previousPlaylist = 0;
-          } else if (previousPreset > 0) {
-            applyPreset(previousPreset);
-            previousPreset = 0;
-          } else {
-            applyTemporaryPreset();
+        if (oneTimeDisable && blockRestore) {
+          // intentionally skip restore; user actions still processed and automation can still disable again
+        } else {
+          if (currentPreset == savedPresetToActivate) {
+            if (previousPlaylist > 0) {
+              applyPreset(previousPlaylist);
+              previousPlaylist = 0;
+            } else if (previousPreset > 0) {
+              applyPreset(previousPreset);
+              previousPreset = 0;
+            } else {
+              applyTemporaryPreset();
+            }
           }
         }
       }
@@ -166,7 +178,8 @@ public:
     top[FPSTR(_enabled)] = isEnabled;
     top[FPSTR(_loopInterval)] = loopInterval;
     top[FPSTR(_activationThreshold)] = activationThreshold;
-    top[FPSTR(_presetToActivate)] = presetToActivate;
+    top[FPSTR(_presetToActivate)] = savedPresetToActivate;
+    top[FPSTR(_oneTimeDisable)] = oneTimeDisable;
 
     top[FPSTR(_webhookEnabled)] = webhookEnabled;
     top[FPSTR(_webhookUrl)] = String(webhookUrl);
@@ -178,6 +191,7 @@ public:
     oappend(F("addInfo('Internal Temperature:Loop Interval', 1, 'ms');"));
     oappend(F("addInfo('Internal Temperature:Activation Threshold', 1, '°C');"));
     oappend(F("addInfo('Internal Temperature:Preset To Activate', 1, '0 = unused');"));
+    oappend(F("addInfo('Internal Temperature:Disable Auto Restore', 1, 'Do not restore previous preset after cooldown');"));
     oappend(F("addInfo('Internal Temperature:Webhook URL', 1, 'GET or exact URL as required');"));
     oappend(F("addInfo('Internal Temperature:Webhook Append Params', 1, 'If enabled, WLED will append ?temp=.. to the provided URL');"));
     oappend(F("addInfo('Internal Temperature:Webhook Threshold', 1, 'Trigger webhook when temp >= this value (°C)');"));
@@ -191,7 +205,7 @@ public:
 
     loopInterval = max(loopInterval, minLoopInterval);
 
-    configComplete &= getJsonValue(top[FPSTR(_presetToActivate)], presetToActivate);
+    configComplete &= getJsonValue(top[FPSTR(_presetToActivate)], savedPresetToActivate);
     configComplete &= getJsonValue(top[FPSTR(_activationThreshold)], activationThreshold);
 
     if (!top.isNull() && top.containsKey(FPSTR(_webhookEnabled))) {
@@ -210,6 +224,15 @@ public:
     } else {
       webhookThreshold = activationThreshold;
     }
+    if (!top.isNull() && top.containsKey(FPSTR(_oneTimeDisable))) {
+      configComplete &= getJsonValue(top[FPSTR(_oneTimeDisable)], oneTimeDisable);
+    } else {
+      oneTimeDisable = false;
+    }
+
+    blockRestore = false;
+    isAboveThreshold = false;
+    webhookTriggered = false;
 
     return configComplete;
   }
@@ -223,6 +246,7 @@ const char InternalTemperatureUsermod::_enabled[] PROGMEM = "Enabled";
 const char InternalTemperatureUsermod::_loopInterval[] PROGMEM = "Loop Interval";
 const char InternalTemperatureUsermod::_activationThreshold[] PROGMEM = "Activation Threshold";
 const char InternalTemperatureUsermod::_presetToActivate[] PROGMEM = "Preset To Activate";
+const char InternalTemperatureUsermod::_oneTimeDisable[] PROGMEM = "Disable Auto Restore";
 const char InternalTemperatureUsermod::_webhookUrl[] PROGMEM = "Webhook URL";
 const char InternalTemperatureUsermod::_webhookEnabled[] PROGMEM = "Webhook Enabled";
 const char InternalTemperatureUsermod::_webhookAppendParams[] PROGMEM = "Webhook Append Params";
