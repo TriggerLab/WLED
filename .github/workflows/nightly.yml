@@ -43,7 +43,7 @@ jobs:
             *.bin
             *.bin.gz
       - name: Repository Dispatch
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@v4
         with:
           repository: wled/WLED-WebInstaller
           event-type: release-nightly
