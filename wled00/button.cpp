@@ -43,17 +43,17 @@ void longPressAction(uint8_t b)
       case 0: setRandomColor(colPri); colorUpdated(CALL_MODE_BUTTON); break;
       case 1: 
         if(buttonBriDirection) {
-          if (bri == 255) break; // avoid unnecessary updates to brightness
+          if (bri == 255) break; 
           if (bri >= 255 - WLED_LONG_BRI_STEPS) bri = 255;
           else bri += WLED_LONG_BRI_STEPS;
         } else {
-          if (bri == 10) break; // avoid unnecessary updates to brightness
-          if (bri <= WLED_LONG_BRI_STEPS) bri = 1;
+          if (bri <= 10) { bri = 10; break; } 
+          if (bri <= 10 + WLED_LONG_BRI_STEPS) bri = 10;
           else bri -= WLED_LONG_BRI_STEPS;
         }
         stateUpdated(CALL_MODE_BUTTON);
-        buttons[b].pressedTime = millis();
-        break; // repeatable action
+        buttons[b].pressedTime = millis(); 
+        break;
     }
   } else {
     applyPreset(buttons[b].macroLongPress, CALL_MODE_BUTTON_PRESET);
