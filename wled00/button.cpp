@@ -7,10 +7,10 @@
 #define WLED_DEBOUNCE_THRESHOLD      50 // only consider button input of at least 50ms as valid (debouncing)
 #define WLED_LONG_PRESS             600 // long press if button is released after held for at least 600ms
 #define WLED_DOUBLE_PRESS           350 // double press if another press within 350ms after a short press
-#define WLED_LONG_REPEATED_ACTION   600 // how often a repeated action (e.g. dimming) is fired on long press on button IDs >0
+#define WLED_LONG_REPEATED_ACTION   400 // how often a repeated action (e.g. dimming) is fired on long press on button IDs >0
 #define WLED_LONG_AP               5000 // how long button 0 needs to be held to activate WLED-AP
 #define WLED_LONG_FACTORY_RESET   10000 // how long button 0 needs to be held to trigger a factory reset
-#define WLED_LONG_BRI_STEPS          8 // how much to increase/decrease the brightness with each long press repetition
+#define WLED_LONG_BRI_STEPS          16 // how much to increase/decrease the brightness with each long press repetition
 
 static const char _mqtt_topic_button[] PROGMEM = "%s/button/%d";  // optimize flash usage
 static bool buttonBriDirection = false; // true: increase brightness, false: decrease brightness
@@ -41,19 +41,19 @@ void longPressAction(uint8_t b)
   if (!buttons[b].macroLongPress) {
     switch (b) {
       case 0: setRandomColor(colPri); colorUpdated(CALL_MODE_BUTTON); break;
-      case 1: 
+      case 1:
         if(buttonBriDirection) {
-          if (bri == 255) break; // avoid unnecessary updates to brightness
-          if (bri >= 255 - WLED_LONG_BRI_STEPS) bri = 255;
-          else bri += WLED_LONG_BRI_STEPS;
+          if (bri == 255) break;
+          if (bri >= 255 - 10) bri = 255;
+          else bri += 10;
         } else {
-          if (bri == 1) break; // avoid unnecessary updates to brightness
-          if (bri <= WLED_LONG_BRI_STEPS) bri = 1;
-          else bri -= WLED_LONG_BRI_STEPS;
+          if (bri == 1) break;
+          if (bri <= 10) bri = 1;
+          else bri -= 10;
         }
-        stateUpdated(CALL_MODE_BUTTON); 
-        buttons[b].pressedTime = millis();         
-        break; // repeatable action
+        stateUpdated(CALL_MODE_BUTTON);
+        buttons[b].pressedTime = millis() + 200;
+        break;
     }
   } else {
     applyPreset(buttons[b].macroLongPress, CALL_MODE_BUTTON_PRESET);
