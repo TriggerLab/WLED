@@ -47,7 +47,7 @@ void longPressAction(uint8_t b)
           if (bri >= 255 - WLED_LONG_BRI_STEPS) bri = 255;
           else bri += WLED_LONG_BRI_STEPS;
         } else {
-          if (bri == 1) break; // avoid unnecessary updates to brightness
+          if (bri == 10) break; // avoid unnecessary updates to brightness
           if (bri <= WLED_LONG_BRI_STEPS) bri = 1;
           else bri -= WLED_LONG_BRI_STEPS;
         }
