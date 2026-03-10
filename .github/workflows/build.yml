@@ -20,9 +20,7 @@ jobs:
     - name: Get default environments
       id: envs
       run: |
-        ENVS=$(grep -A 50 "\[platformio\]" platformio_override.ini | grep "default_envs =" | sed 's/default_envs =//' | tr -d ' \n\r' | tr ',' '\n' | grep . | jq -R . | jq -s -c .)
-        if [ -z "$ENVS" ] || [ "$ENVS" == "[]" ]; then ENVS=$(grep -A 50 "\[platformio\]" platformio.ini | grep "default_envs =" | sed 's/default_envs =//' | tr -d ' \n\r' | tr ',' '\n' | grep . | jq -R . | jq -s -c .); fi
-        echo "environments=$ENVS" >> $GITHUB_OUTPUT
+        echo "environments=$(pio project config --json-output | jq -cr '.[0][1][0][1]')" >> $GITHUB_OUTPUT
     outputs:
       environments: ${{ steps.envs.outputs.environments }}
 
