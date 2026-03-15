@@ -57,6 +57,7 @@ private:
   // Home Assistant
   bool HomeAssistantDiscovery = false;
   int16_t idx = -1; // Domoticz virtual switch idx
+  bool m_seenFirstTrigger   = false;
 
   // strings to reduce flash memory usage (used more than twice)
   static const char _name[];
@@ -260,6 +261,7 @@ bool PIRsensorSwitch::updatePIRsensorState()
       stateChanged = true;
 
       if (sensorPinState[i] == HIGH) {
+        if (!m_seenFirstTrigger) m_seenFirstTrigger = true;
         offTimerStart = 0;
         allOff = false;
         if (!m_mqttOnly && (!m_nightTimeOnly || (m_nightTimeOnly && !isDayTime()))) switchStrip(true);
@@ -333,7 +335,9 @@ void PIRsensorSwitch::addToJsonInfo(JsonObject &root)
 
   String uiDomString;
   if (enabled) {
-    if (offTimerStart > 0) {
+    if (!m_seenFirstTrigger) {
+      infoArr.add(F("awaiting first trigger"));
+    } else if (offTimerStart > 0) {
       uiDomString = "";
       unsigned int offSeconds = (m_switchOffDelay - (millis() - offTimerStart)) / 1000;
       if (offSeconds >= 3600) {
