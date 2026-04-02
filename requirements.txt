@@ -12,7 +12,7 @@ bottle==0.13.4
     # via platformio
 certifi==2026.2.25
     # via requests
-charset-normalizer==3.4.6
+charset-normalizer==3.4.7
     # via requests
 click==8.3.1
     # via
