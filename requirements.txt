@@ -30,7 +30,7 @@ idna==3.13
     #   requests
 marshmallow==3.26.2
     # via platformio
-packaging==26.1
+packaging==26.2
     # via marshmallow
 platformio==6.1.19
     # via -r requirements.in
