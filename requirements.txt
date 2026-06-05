@@ -34,7 +34,7 @@ packaging==26.2
     # via marshmallow
 platformio==6.1.19
     # via -r requirements.in
-pyelftools==0.32
+pyelftools==0.33
     # via platformio
 pyserial==3.5
     # via platformio
