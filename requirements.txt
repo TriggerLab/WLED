@@ -52,7 +52,7 @@ typing-extensions==4.15.0
     # via anyio
 urllib3==2.7.0
     # via requests
-uvicorn>=0.41
+uvicorn>=0.40
     # via platformio
 wsproto==1.3.2
     # via platformio
